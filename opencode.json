@@ -1,0 +1,27 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "github": {
+      "type": "local",
+      "enabled": true,
+      "command": ["npx", "-y", "@modelcontextprotocol/server-github"]
+    },
+    "rube": {
+      "type": "remote",
+      "enabled": true,
+      "url": "https://rube.app/mcp",
+      "headers": {
+        "Authorization": "Bearer <TU_TOKEN>"
+      }
+    },
+    "brightdata": {
+      "type": "local",
+      "enabled": true,
+      "command": ["npx", "-y", "@brightdata/mcp"],
+      "environment": {
+        "API_TOKEN": "${BRIGHTDATA_API_KEY}",
+        "PRO_MODE": "true"
+      }
+    }
+  }
+}
