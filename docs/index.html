@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZenithOCR - API para Facturas Argentinas</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }
+        h1 { color: #2563eb; border-bottom: 2px solid #2563eb; padding-bottom: 10px; }
+        h2 { color: #1e40af; margin-top: 30px; }
+        code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+        pre { background: #1e293b; color: #e2e8f0; padding: 15px; border-radius: 8px; overflow-x: auto; }
+        .endpoint { background: #f8fafc; border-left: 4px solid #2563eb; padding: 10px 15px; margin: 15px 0; }
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .badge-get { background: #22c55e; color: white; }
+        .badge-post { background: #3b82f6; color: white; }
+    </style>
+</head>
+<body>
+    <h1>ZenithOCR API</h1>
+    <p>API para OCR + IA de facturas argentinas - Extracción automática de datos estructurados.</p>
+    
+    <h2>Endpoints</h2>
+    
+    <div class="endpoint">
+        <span class="badge badge-get">GET</span> <code>/health</code>
+        <p>Health check - Verificar estado del servicio</p>
+    </div>
+    
+    <div class="endpoint">
+        <span class="badge badge-post">POST</span> <code>/v1/process</code>
+        <p>Subir imagen de factura para procesar</p>
+    </div>
+    
+    <div class="endpoint">
+        <span class="badge badge-get">GET</span> <code>/v1/jobs/{job_id}</code>
+        <p>Obtener estado y resultados del job</p>
+    </div>
+    
+    <div class="endpoint">
+        <span class="badge badge-get">GET</span> <code>/v1/jobs/{job_id}/export</code>
+        <p>Exportar datos como JSON</p>
+    </div>
+    
+    <h2>Ejemplo de Uso</h2>
+    
+    <pre><code># Subir factura
+curl -X POST -F "file=@factura.png" http://localhost:8000/v1/process
+
+# Obtener resultados
+curl http://localhost:8000/v1/jobs/{job_id}</code></pre>
+    
+    <h2>Campos Extraídos</h2>
+    <ul>
+        <li>Número de factura</li>
+        <li>Fecha de emisión</li>
+        <li>Fecha de vencimiento</li>
+        <li>CUIT del vendedor y cliente</li>
+        <li>Nombre y domicilio</li>
+        <li>Subtotal, IVA y total</li>
+        <li>Items de la factura</li>
+    </ul>
+    
+    <footer>
+        <p><small>MIT License - <a href="https://github.com/Hever2000/API-Facturas-Argentinas">GitHub</a></small></p>
+    </footer>
+</body>
+</html>
