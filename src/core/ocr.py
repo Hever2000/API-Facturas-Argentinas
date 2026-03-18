@@ -18,9 +18,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 PADDLE_VL_API_URL = os.getenv(
     "PADDLE_VL_API_URL", "https://c6vceb62c4n8zfaf.aistudio-app.com/layout-parsing"
 )
-PADDLE_VL_TOKEN = os.getenv(
-    "PADDLE_VL_TOKEN", "916d29311a347cb06a2e3b1daa41403f4fc4d7b9"
-)
+PADDLE_VL_TOKEN = os.getenv("PADDLE_VL_TOKEN", "916d29311a347cb06a2e3b1daa41403f4fc4d7b9")
 
 if not GROQ_API_KEY:
     logger.warning("GROQ_API_KEY not set in environment variables")
@@ -50,9 +48,7 @@ def process_ocr(file_path: str) -> Dict[str, Any]:
 
         payload = {**required_payload, **optional_payload}
 
-        response = requests.post(
-            PADDLE_VL_API_URL, json=payload, headers=headers, timeout=60
-        )
+        response = requests.post(PADDLE_VL_API_URL, json=payload, headers=headers, timeout=60)
 
         if response.status_code != 200:
             logger.error(f"PaddleOCR-VL API error: {response.status_code}")
@@ -72,9 +68,7 @@ def process_ocr(file_path: str) -> Dict[str, Any]:
 
         full_text = " ".join([item["text"] for item in extracted_text])
 
-        logger.info(
-            f"PaddleOCR-VL completed, extracted {len(extracted_text)} text blocks"
-        )
+        logger.info(f"PaddleOCR-VL completed, extracted {len(extracted_text)} text blocks")
 
         return {
             "raw_text": extracted_text,
