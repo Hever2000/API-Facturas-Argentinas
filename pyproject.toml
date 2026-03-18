@@ -19,6 +19,8 @@ dependencies = [
     "easyocr",
     "groq",
     "python-dotenv",
+    "requests>=2.31.0",
+    "tenacity>=8.2.0",
 ]
 
 [tool.setuptools.packages.find]

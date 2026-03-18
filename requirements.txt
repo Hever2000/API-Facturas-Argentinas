@@ -6,3 +6,5 @@ pydantic-settings
 easyocr
 groq
 python-dotenv
+requests>=2.31.0
+tenacity>=8.2.0
