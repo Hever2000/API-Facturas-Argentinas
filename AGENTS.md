@@ -344,3 +344,53 @@ docker exec -it container_id /bin/bash
 5. **Handle timeouts** - Set appropriate timeouts for external API calls
 6. **Log appropriately** - Use appropriate log levels (DEBUG, INFO, WARNING, ERROR)
 7. **Graceful shutdown** - Handle SIGTERM in workers for clean shutdowns
+
+## Git Workflow & Branch Protection
+
+### Branch Strategy
+
+- **main**: Production-ready code (protected)
+- **develop**: Development branch for integration
+- **feature/***: Feature branches for new functionality
+- **fix/***: Bug fix branches
+
+### Branch Protection Rules
+
+The `main` branch is protected. Direct pushes are **not allowed**. All changes must go through Pull Requests.
+
+**How to contribute:**
+
+1. Create a new branch from `main`:
+   ```bash
+   git checkout -b feature/my-new-feature
+   ```
+
+2. Make your changes and commit:
+   ```bash
+   git add .
+   git commit -m "feat: description of changes"
+   ```
+
+3. Push and create a Pull Request:
+   ```bash
+   git push -u origin feature/my-new-feature
+   ```
+
+4. Open a Pull Request on GitHub
+5. Wait for CI/CD checks to pass
+6. Request review from maintainers
+7. Merge after approval
+
+### CI/CD Requirements
+
+Before merging, all checks must pass:
+- ✅ Tests (pytest)
+- ✅ Linting (ruff, black, isort)
+- ✅ Type checking (mypy)
+- ✅ Docker build
+
+### Prohibited Actions
+
+- ❌ Direct push to `main`
+- ❌ Commit secrets or API keys
+- ❌ Disable CI/CD checks
