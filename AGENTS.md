@@ -1,10 +1,10 @@
 # AGENTS.md - ZenithOCR Developer Guide
 
-AI agent guidance for the ZenithOCR project. ~150 lines.
+AI agent guidance for the ZenithOCR project.
 
 ## Project Overview
 
-OCR + LLM invoice processing API for Argentine invoices. Built with FastAPI, EasyOCR, and Groq (Llama 3.3).
+OCR + LLM invoice processing API for Argentine invoices. Built with FastAPI, PaddleOCR-VL, EasyOCR, and Groq (Llama 3.3).
 
 ## Project Structure
 
@@ -15,7 +15,9 @@ zenith-ocr/
 │   ├── core/ocr.py        # OCR & LLM logic
 │   ├── models/invoice.py  # Pydantic models
 │   └── utils/config.py    # Settings
-├── tests/test_api.py      # Test suite
+├── tests/
+│   ├── test_api.py        # API tests
+│   └── conftest.py        # Pytest fixtures
 ├── pyproject.toml         # Project config
 ├── Dockerfile             # Container definition
 └── docker-compose.yml    # Local dev environment
@@ -110,7 +112,6 @@ from src.models.invoice import JobStatus, InvoiceData
 ### Type Hints
 
 ```python
-# Good
 def process_job(job_id: str, data: Dict[str, Any]) -> Optional[InvoiceData]:
     pass
 
@@ -128,15 +129,11 @@ def get_job(job_id: str) -> Dict[str, Any]:
 ### Error Handling
 
 ```python
-# Use try/except for recoverable errors
 try:
     result = ocr_engine.process(file_path)
 except Exception as e:
     logger.error(f"OCR failed for job {job_id}: {str(e)}")
     raise
-
-# Return appropriate HTTP status codes
-from fastapi import HTTPException
 
 if not job:
     raise HTTPException(status_code=404, detail="Job not found")
@@ -164,9 +161,17 @@ logger = logging.getLogger(__name__)
 
 def process_ocr(job_id: str, file_path: str):
     logger.info(f"Starting OCR for job {job_id}")
-    # ... processing ...
     logger.info(f"OCR completed for job {job_id}")
 ```
+
+## OCR Providers
+
+The API supports two OCR providers:
+
+- **paddle_vl** (default): Remote PaddleOCR-VL API
+- **easyocr**: Local EasyOCR
+
+Usage: `POST /v1/process?ocr_provider=easyocr`
 
 ## Environment Variables
 
@@ -174,10 +179,16 @@ def process_ocr(job_id: str, file_path: str):
 # Required
 GROQ_API_KEY=your_groq_api_key
 
+# PaddleOCR-VL (optional)
+PADDLE_VL_API_URL=https://c6vceb62c4n8zfaf.aistudio-app.com/layout-parsing
+PADDLE_VL_TOKEN=your_token
+
+# OCR Settings
+OCR_PROVIDER=paddle_vl  # or easyocr
+
 # Optional
 API_HOST=0.0.0.0
 API_PORT=8000
-OCR_LANGUAGES=en,es
 LOG_LEVEL=INFO
 ```
 
@@ -198,14 +209,9 @@ LOG_LEVEL=INFO
 ### How to Contribute
 
 ```bash
-# 1. Create feature branch
 git checkout -b feature/my-new-feature
-
-# 2. Make changes and commit
 git add .
 git commit -m "feat: description of changes"
-
-# 3. Push and create PR
 git push -u origin feature/my-new-feature
 ```
 
