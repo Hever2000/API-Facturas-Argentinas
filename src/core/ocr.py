@@ -1,7 +1,9 @@
+import base64
 import logging
 import os
 from typing import Any, Dict
 
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,15 +14,78 @@ logging.basicConfig(
 logger = logging.getLogger("zenith_ocr")
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+PADDLE_VL_API_URL = os.getenv(
+    "PADDLE_VL_API_URL", "https://c6vceb62c4n8zfaf.aistudio-app.com/layout-parsing"
+)
+PADDLE_VL_TOKEN = os.getenv("PADDLE_VL_TOKEN", "916d29311a347cb06a2e3b1daa41403f4fc4d7b9")
+
 if not GROQ_API_KEY:
     logger.warning("GROQ_API_KEY not set in environment variables")
 
 
-def process_ocr(file_path: str) -> Dict[str, Any]:
+def process_ocr_paddle_vl(file_path: str) -> Dict[str, Any]:
+    """Process image with PaddleOCR-VL remote API."""
+    logger.info(f"Starting PaddleOCR-VL for file: {file_path}")
+
+    try:
+        with open(file_path, "rb") as file:
+            file_bytes = file.read()
+            file_data = base64.b64encode(file_bytes).decode("ascii")
+
+        headers = {
+            "Authorization": f"token {PADDLE_VL_TOKEN}",
+            "Content-Type": "application/json",
+        }
+
+        required_payload = {"file": file_data, "fileType": 1}
+
+        optional_payload = {
+            "useDocOrientationClassify": False,
+            "useDocUnwarping": False,
+            "useChartRecognition": False,
+        }
+
+        payload = {**required_payload, **optional_payload}
+
+        response = requests.post(PADDLE_VL_API_URL, json=payload, headers=headers, timeout=60)
+
+        if response.status_code != 200:
+            logger.error(f"PaddleOCR-VL API error: {response.status_code}")
+            return {
+                "error": f"API returned status {response.status_code}",
+                "status": "OCR_FAILED",
+            }
+
+        result = response.json()["result"]
+        layout_results = result.get("layoutParsingResults", [])
+
+        extracted_text = []
+        for i, res in enumerate(layout_results):
+            md_text = res.get("markdown", {}).get("text", "")
+            if md_text:
+                extracted_text.append({"text": md_text, "confidence": 1.0, "block": i})
+
+        full_text = " ".join([item["text"] for item in extracted_text])
+
+        logger.info(f"PaddleOCR-VL completed, extracted {len(extracted_text)} text blocks")
+
+        return {
+            "raw_text": extracted_text,
+            "full_text": full_text,
+            "status": "OCR_COMPLETED",
+            "provider": "paddle_vl",
+        }
+
+    except Exception as e:
+        logger.error(f"PaddleOCR-VL failed: {str(e)}")
+        return {"error": str(e), "status": "OCR_FAILED"}
+
+
+def process_ocr_easyocr(file_path: str) -> Dict[str, Any]:
     """Process image with EasyOCR and extract text."""
     import easyocr
 
-    logger.info(f"Starting OCR for file: {file_path}")
+    logger.info(f"Starting EasyOCR for file: {file_path}")
 
     reader = easyocr.Reader(["en", "es"], gpu=False, verbose=False)
     result = reader.readtext(file_path)
@@ -33,9 +98,33 @@ def process_ocr(file_path: str) -> Dict[str, Any]:
 
     full_text = " ".join([item["text"] for item in extracted_text])
 
-    logger.info(f"OCR completed, extracted {len(extracted_text)} text segments")
+    logger.info(f"EasyOCR completed, extracted {len(extracted_text)} text segments")
 
-    return {"raw_text": extracted_text, "full_text": full_text, "status": "OCR_COMPLETED"}
+    return {
+        "raw_text": extracted_text,
+        "full_text": full_text,
+        "status": "OCR_COMPLETED",
+        "provider": "easyocr",
+    }
+
+
+def process_ocr(file_path: str, provider: str = "paddle_vl") -> Dict[str, Any]:
+    """Process image with OCR and extract text.
+
+    Args:
+        file_path: Path to the image file
+        provider: OCR provider - 'paddle_vl' (default) or 'easyocr'
+
+    Returns:
+        Dictionary with extracted text and status
+    """
+    if provider == "paddle_vl":
+        return process_ocr_paddle_vl(file_path)
+    elif provider == "easyocr":
+        return process_ocr_easyocr(file_path)
+    else:
+        logger.warning(f"Unknown provider {provider}, using paddle_vl")
+        return process_ocr_paddle_vl(file_path)
 
 
 def extract_invoice_fields(full_text: str) -> Dict[str, Any]:
