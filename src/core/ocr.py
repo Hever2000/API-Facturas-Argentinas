@@ -2,7 +2,6 @@ import base64
 import json
 import logging
 import os
-import time
 from typing import Any, Dict
 
 import requests
@@ -61,7 +60,7 @@ def process_ocr_with_easyocr(file_path: str) -> Dict[str, Any]:
         results = reader.readtext(file_path)
 
         extracted_text = []
-        for i, (bbox, text, confidence) in enumerate(results):
+        for i, (_bbox, text, confidence) in enumerate(results):
             if text.strip():
                 extracted_text.append({
                     "text": text.strip(),
@@ -117,7 +116,10 @@ def process_ocr(file_path: str) -> Dict[str, Any]:
         )
 
         if response.status_code != 200:
-            logger.warning(f"PaddleOCR-VL API error: {response.status_code}, trying EasyOCR fallback")
+            logger.warning(
+                f"PaddleOCR-VL API error: {response.status_code}, "
+                "trying EasyOCR fallback"
+            )
             return process_ocr_with_easyocr(file_path)
 
         result = response.json()["result"]
@@ -141,7 +143,7 @@ def process_ocr(file_path: str) -> Dict[str, Any]:
         }
 
     except requests.exceptions.Timeout:
-        logger.warning(f"PaddleOCR-VL timeout, trying EasyOCR fallback")
+        logger.warning("PaddleOCR-VL timeout, trying EasyOCR fallback")
         return process_ocr_with_easyocr(file_path)
     except Exception as e:
         logger.warning(f"PaddleOCR-VL failed: {str(e)}, trying EasyOCR fallback")
@@ -160,95 +162,84 @@ def extract_invoice_fields(full_text: str) -> Dict[str, Any]:
 
     client = Groq(api_key=GROQ_API_KEY)
 
-    prompt = f"""Eres un asistente especializado en extraer información de facturas argentinas (sistema de facturación AFIP).
-
-Analiza el texto de la factura y extrae TODOS los campos disponibles. Devuelve SOLO un JSON válido con esta estructura exacta:
-
-{{
-    "codigo_factura": "Código único de la factura (si existe en el documento)",
-
-    "punto_de_venta": "Código de punto de venta (4 dígitos, ej: 0001)",
-    "numero_comprobante": "Número de comprobante (ej: 00001293)",
-    "tipo_comprobante": "Tipo (FC=Factura, ND=Nota Débito, NC=Nota Crédito)",
-    "letra_comprobante": "Letra (A, B, C o M para mixtas)",
-
-    "fecha_emision": "Fecha de emisión (YYYY-MM-DD)",
-    "fecha_vencimiento_pago": "Fecha de vencimiento para el pago (YYYY-MM-DD)",
-
-    "periodo_desde": "Período facturado desde (YYYY-MM-DD si existe)",
-    "periodo_hasta": "Período facturado hasta (YYYY-MM-DD si existe)",
-
-    "cae": "Código de Autorización de Emisión (CAE - 14 dígitos si existe)",
-    "fecha_vencimiento_cae": "Fecha de vencimiento del CAE (YYYY-MM-DD si existe)",
-
-    "razon_social_vendedor": "Razón Social del vendedor",
-    "vendedor_cuit": "CUIT del vendedor (formato XX-XXXXXXXX-X)",
-    "vendedor_condicion_iva": "Condición frente al IVA del vendedor (IVA Responsable Inscripto, IVA Sujeto Exento, Consumidor Final, etc.)",
-    "vendedor_ingresos_brutos": "Número de Inscripción en Ingresos Brutos (si existe)",
-    "vendedor_domicilio": "Domicilio comercial del vendedor",
-    "vendedor_localidad": "Localidad y CP del vendedor",
-
-    "razon_social_cliente": "Razón Social del cliente",
-    "cliente_cuit": "CUIT del cliente (formato XX-XXXXXXXX-X)",
-    "cliente_condicion_iva": "Condición frente al IVA del cliente",
-    "cliente_domicilio": "Domicilio del cliente",
-    "cliente_localidad": "Localidad y CP del cliente",
-
-    "subtotal": 0.00,
-    "total": 0.00,
-
-    "importe_neto_gravado": 0.00,
-    "importe_neto_no_gravado": 0.00,
-    "importe_exento": 0.00,
-
-    "iva_27": 0.00,
-    "iva_21": 0.00,
-    "iva_10_5": 0.00,
-    "iva_5": 0.00,
-    "iva_2_5": 0.00,
-    "iva_0": 0.00,
-
-    "total_iva": 0.00,
-
-    "importe_otros_tributos": 0.00,
-    "total_tributos": 0.00,
-
-    "condicion_pago": "Condición de pago (Contado, Cuenta Corriente, Tarjeta de Débito, etc.)",
-
-    "items": [
-        {{
-            "item_numero": 1,
-            "codigo": "Código del producto/servicio (si existe)",
-            "descripcion": "Descripción completa del producto/servicio",
-            "cantidad": 1.0,
-            "unidad_medida": "Unidad de medida (ej: unidades, hs, kg - si existe)",
-            "precio_unitario": 0.00,
-            "subtotal_item": 0.00,
-            "total_item": 0.00,
-            "alicuota_iva": "0%, 5%, 10.5%, 21% o 27% (si existe)",
-            "importe_iva": 0.00,
-            "bonificacion": 0.00
-        }}
-    ],
-
-    "observaciones": "Observaciones o notas adicionales (si existen)"
-}}
-
-REGLAS IMPORTANTES:
-- Usa punto (.) como separador decimal
-- Todos los montos deben ser números (no strings con $, comas separadoras de miles, etc.)
-- Los campos que NO aparezcan en el documento deben ser null (strings) o 0 (números)
-- El CUIT debe tener el formato XX-XXXXXXXX-X con guiones
-- La suma de iva_0 + iva_5 + iva_10_5 + iva_21 + iva_27 debe ser igual a total_iva
-- subtotal + total_iva + total_tributos debe приблизительно igualar total
-- Si hay varios items, incluye TODOS en el array "items"
-- El campo "total_item" de cada item debe incluir el subtotal + IVA del item (o el total de la línea)
-- El campo "subtotal_item" es el importe sin IVA
-
-Texto de la factura a analizar:
-{full_text}
-
-Responde ONLY con el JSON, sin texto adicional."""
+    prompt = (
+        "Eres un asistente especializado en extraer información de facturas "
+        "argentinas (sistema de facturación AFIP).\n\n"
+        "Analiza el texto de la factura y extrae TODOS los campos disponibles. "
+        "Devuelve SOLO un JSON válido con esta estructura exacta:\n\n"
+        "{\n"
+        '    "codigo_factura": "Código único de la factura (si existe en el documento)",\n\n'
+        '    "punto_de_venta": "Código de punto de venta (4 dígitos, ej: 0001)",\n'
+        '    "numero_comprobante": "Número de comprobante (ej: 00001293)",\n'
+        '    "tipo_comprobante": "Tipo (FC=Factura, ND=Nota Débito, NC=Nota Crédito)",\n'
+        '    "letra_comprobante": "Letra (A, B, C o M para mixtas)",\n\n'
+        '    "fecha_emision": "Fecha de emisión (YYYY-MM-DD)",\n'
+        '    "fecha_vencimiento_pago": "Fecha de vencimiento para el pago (YYYY-MM-DD)",\n\n'
+        '    "periodo_desde": "Período facturado desde (YYYY-MM-DD si existe)",\n'
+        '    "periodo_hasta": "Período facturado hasta (YYYY-MM-DD si existe)",\n\n'
+        '    "cae": "Código de Autorización de Emisión (CAE - 14 dígitos si existe)",\n'
+        '    "fecha_vencimiento_cae": "Fecha de vencimiento del CAE (YYYY-MM-DD si existe)",\n\n'
+        '    "razon_social_vendedor": "Razón Social del vendedor",\n'
+        '    "vendedor_cuit": "CUIT del vendedor (formato XX-XXXXXXXX-X)",\n'
+        '    "vendedor_condicion_iva": "Condición frente al IVA del vendedor '
+        '(IVA Responsable Inscripto, IVA Sujeto Exento, Consumidor Final, etc.)",\n'
+        '    "vendedor_ingresos_brutos": "Número de Inscripción en Ingresos Brutos (si existe)",\n'
+        '    "vendedor_domicilio": "Domicilio comercial del vendedor",\n'
+        '    "vendedor_localidad": "Localidad y CP del vendedor",\n\n'
+        '    "razon_social_cliente": "Razón Social del cliente",\n'
+        '    "cliente_cuit": "CUIT del cliente (formato XX-XXXXXXXX-X)",\n'
+        '    "cliente_condicion_iva": "Condición frente al IVA del cliente",\n'
+        '    "cliente_domicilio": "Domicilio del cliente",\n'
+        '    "cliente_localidad": "Localidad y CP del cliente",\n\n'
+        '    "subtotal": 0.00,\n'
+        '    "total": 0.00,\n\n'
+        '    "importe_neto_gravado": 0.00,\n'
+        '    "importe_neto_no_gravado": 0.00,\n'
+        '    "importe_exento": 0.00,\n\n'
+        '    "iva_27": 0.00,\n'
+        '    "iva_21": 0.00,\n'
+        '    "iva_10_5": 0.00,\n'
+        '    "iva_5": 0.00,\n'
+        '    "iva_2_5": 0.00,\n'
+        '    "iva_0": 0.00,\n\n'
+        '    "total_iva": 0.00,\n\n'
+        '    "importe_otros_tributos": 0.00,\n'
+        '    "total_tributos": 0.00,\n\n'
+        '    "condicion_pago": "Condición de pago (Contado, Cuenta Corriente, '
+        'Tarjeta de Débito, etc.)",\n\n'
+        '    "items": [\n'
+        "        {\n"
+        '            "item_numero": 1,\n'
+        '            "codigo": "Código del producto/servicio (si existe)",\n'
+        '            "descripcion": "Descripción completa del producto/servicio",\n'
+        '            "cantidad": 1.0,\n'
+        '            "unidad_medida": "Unidad de medida (ej: unidades, hs, kg - si existe)",\n'
+        '            "precio_unitario": 0.00,\n'
+        '            "subtotal_item": 0.00,\n'
+        '            "total_item": 0.00,\n'
+        '            "alicuota_iva": "0%, 5%, 10.5%, 21% o 27% (si existe)",\n'
+        '            "importe_iva": 0.00,\n'
+        '            "bonificacion": 0.00\n'
+        "        }\n"
+        '    ],\n\n'
+        '    "observaciones": "Observaciones o notas adicionales (si existen)"\n'
+        "}\n\n"
+        "REGLAS IMPORTANTES:\n"
+        "- Usa punto (.) como separador decimal\n"
+        "- Todos los montos deben ser números (no strings con $, "
+        "comas separadoras de miles, etc.)\n"
+        "- Los campos que NO aparezcan en el documento deben ser null (strings) o 0 (números)\n"
+        "- El CUIT debe tener el formato XX-XXXXXXXX-X con guiones\n"
+        "- La suma de iva_0 + iva_5 + iva_10_5 + iva_21 + iva_27 debe ser igual a total_iva\n"
+        "- subtotal + total_iva + total_tributos debe aproximarse a total\n"
+        "- Si hay varios items, incluye TODOS en el array 'items'\n"
+        "- El campo 'total_item' de cada item debe incluir el subtotal + IVA "
+        "del item (o el total de la línea)\n"
+        "- El campo 'subtotal_item' es el importe sin IVA\n\n"
+        "Texto de la factura a analizar:\n"
+        f"{full_text}\n\n"
+        "Responde ONLY con el JSON, sin texto adicional."
+    )
 
     try:
         response = client.chat.completions.create(
