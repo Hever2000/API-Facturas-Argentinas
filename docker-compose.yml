@@ -8,6 +8,8 @@ services:
       - "8000:8000"
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
+      - PADDLE_VL_API_URL=${PADDLE_VL_API_URL:-https://c6vceb62c4n8zfaf.aistudio-app.com/layout-parsing}
+      - PADDLE_VL_TOKEN=${PADDLE_VL_TOKEN}
       - OCR_LANGUAGES=en,es
       - LOG_LEVEL=INFO
     volumes:

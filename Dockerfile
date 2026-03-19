@@ -32,7 +32,6 @@ COPY --from=builder /usr/local/lib/python3.12/site-packages/ /usr/local/lib/pyth
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
 COPY src/ ./src/
-COPY pyproject.toml .
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1

@@ -1,142 +1,116 @@
-# FacturaAI
+# Backend API
 
-API para procesamiento de facturas argentinas utilizando OCR e IA. Extrae automáticamente datos estructurados de comprobantes y receipts.
+OCR + LLM invoice processing API for Argentine invoices.
 
-## Características
+## Stack
 
-- **OCR**: Extrae texto de imágenes de facturas usando PaddleOCR-VL
-- **Extracción con IA**: Analiza datos estructurados usando Groq (Llama 3.3)
-- **Exportación**: Descarga datos procesados en formato JSON
-- **API REST**: Interfaz basada en FastAPI
-- **Docker**: Listo para despliegue en producción
+- **Framework**: FastAPI
+- **OCR**: PaddleOCR-VL (remote) with EasyOCR fallback
+- **LLM**: Groq (Llama 3.3)
+- **Language**: Python 3.12
 
-## Campos de Factura Soportados
+## Project Structure
 
-- Número de factura, fecha de emisión, fecha de vencimiento
-- Información del vendedor (nombre, CUIT, dirección, condición de IVA)
-- Información del cliente (nombre, CUIT, dirección)
-- Ítems de la línea (descripción, cantidad, precio, importe)
-- Totales financieros (subtotal, impuestos, total)
-- Condiciones de pago y tipo de factura
+```
+backend/
+├── src/
+│   ├── api/
+│   │   └── main.py          # FastAPI endpoints
+│   ├── core/
+│   │   └── ocr.py           # OCR & LLM logic
+│   ├── models/
+│   │   └── invoice.py       # Pydantic models
+│   └── utils/
+│       └── config.py        # Settings
+├── tests/
+│   ├── conftest.py          # Pytest fixtures
+│   └── test_api.py          # API tests
+├── scripts/
+│   └── lint-fix.sh          # Linting script
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+└── pyproject.toml
+```
 
-## Requisitos
+## Getting Started
 
-- Python 3.12+
-- Clave de API de Groq ([obtener aquí](https://console.groq.com/))
-
-## Instalación
-
-### Desarrollo Local
+### Local Development
 
 ```bash
-# Clonar el repositorio
-git clone https://github.com/tuusuario/facturaai.git
-cd facturaai
-
-# Crear entorno virtual
+# Create virtual environment
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# o
-venv\Scripts\activate  # Windows
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Instalar dependencias
+# Install dependencies
 pip install -r requirements.txt
 
-# Configurar entorno
-cp .env.example .env
-# Editar .env y agregar tu GROQ_API_KEY
-
-# Ejecutar el servidor
-uvicorn src.api.main:app --reload
+# Run server
+uvicorn src.api.main:app --reload --port 8000
 ```
 
 ### Docker
 
 ```bash
-# Construir y ejecutar con Docker
+# Build and run
 docker-compose up --build
 
-# O construir manualmente
-docker build -t facturaai .
-docker run -p 8000:8000 -e GROQ_API_KEY=tu_clave facturaai
+# Run in background
+docker-compose up -d
 ```
 
-## Uso
-
-### Endpoints de la API
-
-| Endpoint | Método | Descripción |
-|----------|--------|-------------|
-| `/v1/process` | POST | Subir factura para procesar |
-| `/v1/jobs/{job_id}` | GET | Obtener estado del trabajo y resultados |
-| `/v1/jobs/{job_id}/export` | GET | Exportar como archivo JSON |
-| `/health` | GET | Verificación de salud |
-
-### Ejemplo: Procesar Factura
+## Environment Variables
 
 ```bash
-# Subir factura
-curl -X POST -F "file=@factura.png" http://localhost:8000/v1/process
+# Required
+GROQ_API_KEY=your_groq_api_key
 
-# Respuesta:
-# {"job_id": "abc-123", "status": "PROCESSED"}
+# PaddleOCR-VL (remote API)
+PADDLE_VL_API_URL=https://c6vceb62c4n8zfaf.aistudio-app.com/layout-parsing
+PADDLE_VL_TOKEN=your_token
 
-# Obtener resultados
-curl http://localhost:8000/v1/jobs/abc-123
-
-# Exportar JSON
-curl http://localhost:8000/v1/jobs/abc-123/export -o factura.json
+# Optional
+API_HOST=0.0.0.0
+API_PORT=8000
+LOG_LEVEL=INFO
 ```
 
-### Cliente Python
+## API Endpoints
 
-```python
-import requests
+### POST /v1/process
+Upload and process an invoice image.
 
-# Subir
-with open("factura.png", "rb") as f:
-    response = requests.post(
-        "http://localhost:8000/v1/process",
-        files={"file": f}
-    )
-job_id = response.json()["job_id"]
-
-# Obtener resultados
-result = requests.get(f"http://localhost:8000/v1/jobs/{job_id}").json()
-print(result["extracted_data"])
+```bash
+curl -X POST "http://localhost:8000/v1/process" \
+  -F "file=@factura.pdf"
 ```
 
-## Estructura del Proyecto
+### GET /v1/jobs/{job_id}
+Get job status and results.
 
+### GET /v1/jobs/{job_id}/export
+Export processed data as JSON.
+
+### GET /health
+Health check endpoint.
+
+## Testing
+
+```bash
+# Run tests
+pytest tests/
+
+# With coverage
+pytest --cov=src --cov-report=html
 ```
-facturaai/
-├── src/
-│   ├── api/          # Endpoints de FastAPI
-│   ├── core/         # Lógica de OCR e IA
-│   ├── models/       # Modelos Pydantic
-│   └── utils/        # Utilidades
-├── tests/            # Archivos de prueba
-├── docs/             # Documentación
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-└── README.md
+
+## Linting
+
+```bash
+# Auto-fix
+ruff check --fix .
+
+# Format
+black --line-length=100 .
+isort --profile=black .
 ```
-
-## Configuración
-
-| Variable | Descripción | Valor por defecto |
-|----------|-------------|-------------------|
-| `GROQ_API_KEY` | Clave de API de Groq (requerido) | - |
-| `API_HOST` | Host de la API | `0.0.0.0` |
-| `API_PORT` | Puerto de la API | `8000` |
-| `OCR_LANGUAGES` | Idiomas para OCR | `en,es` |
-| `LOG_LEVEL` | Nivel de logging | `INFO` |
-
-## Licencia
-
-Licencia MIT - ver [LICENSE](LICENSE) para más detalles.
-
-## Contribuir
-
-Ver [CONTRIBUTING.md](CONTRIBUTING.md) para las directrices.
