@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -125,7 +124,7 @@ def generate_training_dataset() -> List[Dict[str, Any]]:
             corrections_by_job[job_id] = []
         corrections_by_job[job_id].append(correction)
 
-    for job_id, corrections in corrections_by_job.items():
+    for _job_id, corrections in corrections_by_job.items():
         job_data = {}
         raw_text = ""
 

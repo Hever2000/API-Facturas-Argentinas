@@ -8,17 +8,25 @@ from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from src.core.ocr import extract_invoice_fields, process_ocr
 from src.core.feedback import (
     add_correction,
     export_training_jsonl,
     get_feedback_stats,
 )
+from src.core.ocr import extract_invoice_fields, process_ocr
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("factura_ai")
+
+
+class FeedbackRequest(BaseModel):
+    """Request model for feedback submission."""
+
+    field: str = Field(..., description="Field name that was incorrectly extracted")
+    correct_value: Any = Field(..., description="The correct value for this field")
+
 
 app = FastAPI(
     title="FacturaAI API",
@@ -374,10 +382,3 @@ async def feedback_stats():
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "factura-ai"}
-
-
-class FeedbackRequest(BaseModel):
-    """Request model for feedback submission."""
-
-    field: str = Field(..., description="Field name that was incorrectly extracted")
-    correct_value: Any = Field(..., description="The correct value for this field")
