@@ -362,6 +362,22 @@ def extract_invoice_fields(full_text: str) -> Dict[str, Any]:
         "Responde ONLY con el JSON, sin texto adicional."
     )
 
+    # Agregar ejemplos de feedback para few-shot learning
+    try:
+        from src.core.feedback import load_feedback_examples
+
+        feedback_examples = load_feedback_examples(limit=5)
+        if feedback_examples:
+            prompt += "\n\nIMPORTANTE - Correcciones aprendidas:\n"
+            prompt += "Basándote en errores anteriores, evita repetir estos mistakes:\n"
+            for ex in feedback_examples:
+                wrong = str(ex.get("wrong_value", ""))[:50]
+                correct = str(ex.get("correct_value", ""))[:50]
+                prompt += f"- Campo '{ex['field']}': No uses '{wrong}', usa '{correct}'\n"
+            prompt += "\n"
+    except ImportError:
+        pass  # Feedback module not available
+
     try:
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",

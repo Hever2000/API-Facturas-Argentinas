@@ -6,8 +6,14 @@ from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
+from pydantic import BaseModel, Field
 
 from src.core.ocr import extract_invoice_fields, process_ocr
+from src.core.feedback import (
+    add_correction,
+    export_training_jsonl,
+    get_feedback_stats,
+)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -285,7 +291,93 @@ async def get_job_text(job_id: str):
     )
 
 
+@app.post("/v1/jobs/{job_id}/feedback", summary="Submit correction feedback")
+async def submit_feedback(job_id: str, feedback: FeedbackRequest):
+    """
+    Submit a correction for a processed invoice field.
+
+    - **job_id**: Job ID with processed data
+    - **field**: Field name that was incorrectly extracted
+    - **correct_value**: The correct value for this field
+    """
+    job = jobs_db.get(job_id)
+    if not job:
+        logger.warning(f"Job not found for feedback: {job_id}")
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if job.get("status") != "PROCESSED":
+        logger.warning(f"Job not processed: {job_id}")
+        raise HTTPException(status_code=400, detail="Job not yet processed")
+
+    wrong_value = None
+    extracted_data = job.get("extracted_data", {})
+
+    # Handle nested item fields (e.g., "items[0].descripcion")
+    if "." in feedback.field:
+        parts = feedback.field.split(".")
+        if parts[0] == "items" and len(parts) == 3:
+            idx = int(parts[1])
+            field_name = parts[2]
+            if idx < len(extracted_data.get("items", [])):
+                wrong_value = extracted_data["items"][idx].get(field_name)
+    else:
+        wrong_value = extracted_data.get(feedback.field)
+
+    correction = add_correction(
+        job_id=job_id,
+        field=feedback.field,
+        wrong_value=wrong_value,
+        correct_value=feedback.correct_value,
+        raw_text=job.get("full_text", ""),
+        extracted_data=extracted_data,
+    )
+
+    logger.info(f"Feedback submitted for job {job_id}: {feedback.field}")
+
+    return {
+        "status": "saved",
+        "correction_id": correction["id"],
+        "feedback_count": get_feedback_stats()["total_corrections"],
+    }
+
+
+@app.get("/v1/training-data/export", summary="Export training dataset")
+async def export_training_data():
+    """
+    Export feedback corrections as JSONL for model fine-tuning.
+
+    Returns a JSONL file with training examples.
+    """
+    filepath = export_training_jsonl()
+
+    with open(filepath, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    logger.info(f"Training data exported: {filepath}")
+
+    return Response(
+        content=content,
+        media_type="application/jsonl",
+        headers={"Content-Disposition": "attachment; filename=training_data.jsonl"},
+    )
+
+
+@app.get("/v1/feedback/stats", summary="Get feedback statistics")
+async def feedback_stats():
+    """
+    Get statistics about submitted feedback corrections.
+    """
+    return get_feedback_stats()
+
+
 @app.get("/health", summary="Health check")
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "factura-ai"}
+
+
+class FeedbackRequest(BaseModel):
+    """Request model for feedback submission."""
+
+    field: str = Field(..., description="Field name that was incorrectly extracted")
+    correct_value: Any = Field(..., description="The correct value for this field")
