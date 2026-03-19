@@ -1,6 +1,25 @@
-# Backend API
+# FacturaAI
 
-OCR + LLM invoice processing API for Argentine invoices.
+API para procesamiento de facturas argentinas utilizando OCR e IA. Extrae automáticamente datos estructurados de comprobantes y receipts.
+
+## Características
+
+- **OCR**: Extrae texto de imágenes de facturas usando PaddleOCR-VL
+- **Extracción con IA**: Analiza datos estructurados usando Groq (Llama 3.3)
+- **Formatos de exportación**: JSON y texto plano legible
+- **Sistema de Feedback**: Corrige errores y mejora la IA progresivamente
+- **Exportación de Dataset**: Genera datos para fine-tuning del modelo
+- **API REST**: Interfaz basada en FastAPI
+- **Docker**: Listo para despliegue en producción
+
+## Campos de Factura Soportados
+
+- Número de factura, fecha de emisión, fecha de vencimiento
+- Información del vendedor (nombre, CUIT, dirección, condición de IVA)
+- Información del cliente (nombre, CUIT, dirección)
+- Ítems de la línea (descripción, cantidad, precio, importe)
+- Totales financieros (subtotal, impuestos, total)
+- Condiciones de pago y tipo de factura
 
 ## Stack
 
@@ -12,12 +31,12 @@ OCR + LLM invoice processing API for Argentine invoices.
 ## Project Structure
 
 ```
-backend/
 ├── src/
 │   ├── api/
 │   │   └── main.py          # FastAPI endpoints
 │   ├── core/
-│   │   └── ocr.py           # OCR & LLM logic
+│   │   ├── ocr.py           # OCR & LLM logic
+│   │   └── feedback.py      # Feedback system
 │   ├── models/
 │   │   └── invoice.py       # Pydantic models
 │   └── utils/
@@ -25,8 +44,7 @@ backend/
 ├── tests/
 │   ├── conftest.py          # Pytest fixtures
 │   └── test_api.py          # API tests
-├── scripts/
-│   └── lint-fix.sh          # Linting script
+├── .github/workflows/        # CI/CD pipelines
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
@@ -88,8 +106,50 @@ curl -X POST "http://localhost:8000/v1/process" \
 ### GET /v1/jobs/{job_id}
 Get job status and results.
 
+```bash
+curl "http://localhost:8000/v1/jobs/{job_id}"
+```
+
 ### GET /v1/jobs/{job_id}/export
-Export processed data as JSON.
+Export processed data as JSON or TXT.
+
+```bash
+# JSON (default)
+curl "http://localhost:8000/v1/jobs/{job_id}/export"
+
+# Plain text
+curl "http://localhost:8000/v1/jobs/{job_id}/export?format=txt"
+```
+
+### GET /v1/jobs/{job_id}/text
+Get invoice as formatted plain text.
+
+```bash
+curl "http://localhost:8000/v1/jobs/{job_id}/text"
+```
+
+### POST /v1/jobs/{job_id}/feedback
+Submit correction feedback to improve future extractions.
+
+```bash
+curl -X POST "http://localhost:8000/v1/jobs/{job_id}/feedback" \
+  -H "Content-Type: application/json" \
+  -d '{"field": "vendedor_cuit", "correct_value": "30-12345678-9"}'
+```
+
+### GET /v1/training-data/export
+Export feedback corrections as JSONL for model fine-tuning.
+
+```bash
+curl -O "http://localhost:8000/v1/training-data/export"
+```
+
+### GET /v1/feedback/stats
+Get feedback correction statistics.
+
+```bash
+curl "http://localhost:8000/v1/feedback/stats"
+```
 
 ### GET /health
 Health check endpoint.
@@ -112,5 +172,4 @@ ruff check --fix .
 
 # Format
 black --line-length=100 .
-isort --profile=black .
 ```
