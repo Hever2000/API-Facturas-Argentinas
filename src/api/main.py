@@ -1,24 +1,38 @@
 import logging
 import os
 import tempfile
+from contextlib import asynccontextmanager
 from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from src.api.v1 import auth_router
+from src.core.config import settings
 from src.core.feedback import (
     add_correction,
     export_training_jsonl,
     get_feedback_stats,
 )
 from src.core.ocr import extract_invoice_fields, process_ocr
+from src.db import close_db, init_db
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("factura_ai")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan events for startup and shutdown."""
+    await init_db()
+    settings.ensure_directories()
+    yield
+    await close_db()
 
 
 class FeedbackRequest(BaseModel):
@@ -32,7 +46,18 @@ app = FastAPI(
     title="FacturaAI API",
     description="OCR + LLM invoice processing API for Argentine invoices",
     version="1.0.0",
+    lifespan=lifespan,
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
 
 jobs_db: dict[str, Any] = {}
 

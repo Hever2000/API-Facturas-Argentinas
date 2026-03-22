@@ -29,12 +29,8 @@ class APIKey(BaseModel):
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    last_used_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     request_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 

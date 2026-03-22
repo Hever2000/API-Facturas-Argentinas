@@ -26,12 +26,8 @@ class User(Base, UUIDMixin, TimestampMixin):
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Subscription
-    subscription_tier: Mapped[str] = mapped_column(
-        String(50), default="free", nullable=False
-    )
-    subscription_external_id: Mapped[str | None] = mapped_column(
-        String(255), nullable=True
-    )
+    subscription_tier: Mapped[str] = mapped_column(String(50), default="free", nullable=False)
+    subscription_external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     subscription_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     subscription_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -64,9 +60,7 @@ class User(Base, UUIDMixin, TimestampMixin):
         """Check if user has active subscription."""
         if self.subscription_tier == "free":
             return False
-        if self.subscription_expires_at and self.subscription_expires_at < datetime.now():
-            return False
-        return True
+        return not (self.subscription_expires_at and self.subscription_expires_at < datetime.now())
 
     @property
     def request_limit(self) -> int:
