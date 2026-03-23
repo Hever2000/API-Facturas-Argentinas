@@ -15,24 +15,12 @@ from src.api.v1 import (
 )
 from src.core.config import settings
 from src.db import close_db, init_db
-from src.db.redis import close_redis, init_redis, redis_available
+from src.db.redis import close_redis, init_redis, redis_available, _redact_url
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("factura_ai")
-
-
-def _redact_url(url: str) -> str:
-    """Redact credentials from a URL for safe logging."""
-    import re
-
-    # Remove user:password@ or user@ patterns
-    redacted = re.sub(r"://[^@]+@", "://***@", url)
-    # If no @ found, still try to remove leading protocol+creds
-    if "@" not in redacted:
-        redacted = re.sub(r"://[^/]+", "://***", url)
-    return redacted
 
 
 @asynccontextmanager
@@ -108,7 +96,7 @@ app.include_router(webhooks_router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/health", summary="Health check")
-async def health_check():
+async def health_check() -> dict[str, str]:
     """Health check endpoint."""
     return {
         "status": "healthy",

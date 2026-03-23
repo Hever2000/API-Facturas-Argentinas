@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
 from src.db.redis import redis_available, redis_service
+from src.models.apikey import APIKey
 
 
 class RateLimiter:

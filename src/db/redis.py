@@ -1,6 +1,6 @@
+import asyncio
 import logging
 import random
-import time
 from typing import Any
 
 import redis.asyncio as redis
@@ -23,7 +23,7 @@ async def _connect_with_retry() -> redis.Redis | None:
     
     Returns Redis client if successful, None if all retries fail.
     """
-    last_error = None
+    last_error: Exception | None = None
     
     for attempt in range(1, MAX_RETRIES + 1):
         try:
@@ -42,9 +42,9 @@ async def _connect_with_retry() -> redis.Redis | None:
             if attempt < MAX_RETRIES:
                 delay = min(INITIAL_DELAY * (2 ** (attempt - 1)) + random.uniform(0, 1), MAX_DELAY)
                 logger.warning(f"Redis connection attempt {attempt}/{MAX_RETRIES} failed: {e}. Retrying in {delay:.1f}s...")
-                time.sleep(delay)
+                await asyncio.sleep(delay)
             else:
-                logger.error(f"Redis connection failed after {MAX_RETRIES} attempts: {e}")
+                logger.error(f"Redis connection failed after {MAX_RETRIES} attempts: {last_error}")
     
     return None
 

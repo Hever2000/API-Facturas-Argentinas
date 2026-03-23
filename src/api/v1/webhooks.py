@@ -68,7 +68,7 @@ async def check_webhook_idempotency(event_id: str) -> bool:
         logger.info(f"Webhook event {event_id} already processed, skipping")
         return True
 
-    await redis_service.setex(key, timedelta(hours=24).total_seconds(), "1")
+    await redis_service.setex(key, 86400, "1")
     return False
 
 
