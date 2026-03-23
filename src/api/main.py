@@ -25,12 +25,31 @@ logger = logging.getLogger("factura_ai")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan events for startup and shutdown."""
-    await init_db()
-    await init_redis()
-    settings.ensure_directories()
+    try:
+        logger.info("Starting FacturaAI API...")
+        logger.info(f"Environment: {settings.ENVIRONMENT}")
+        logger.info(f"Database: {settings.DATABASE_URL.split('@')[1] if '@' in settings.DATABASE_URL else settings.DATABASE_URL}")
+        logger.info(f"Redis: {settings.REDIS_URL}")
+        logger.info("Initializing database connection...")
+        await init_db()
+        logger.info("Database connection established.")
+        logger.info("Initializing Redis connection...")
+        await init_redis()
+        logger.info("Redis connection established.")
+        logger.info("Ensuring storage directories exist...")
+        settings.ensure_directories()
+        logger.info("FacturaAI API started successfully.")
+    except Exception as e:
+        logger.error(f"Startup failed: {e}", exc_info=True)
+        raise
     yield
-    await close_redis()
-    await close_db()
+    try:
+        logger.info("Shutting down FacturaAI API...")
+        await close_redis()
+        await close_db()
+        logger.info("FacturaAI API shut down.")
+    except Exception as e:
+        logger.error(f"Shutdown error: {e}", exc_info=True)
 
 
 app = FastAPI(
