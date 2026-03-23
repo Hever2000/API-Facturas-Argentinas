@@ -1,9 +1,12 @@
+import logging
 import os
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -38,6 +41,32 @@ class Settings(BaseSettings):
 
     # Redis
     REDIS_URL: str = Field(default="redis://localhost:6379/0")
+
+    @model_validator(mode="after")
+    def _block_localhost_in_prod(self) -> "Settings":
+        """
+        Block localhost defaults in production/staging.
+
+        Uses model_validator(mode="after") so ENVIRONMENT is fully resolved
+        from the settings (including .env file and case normalization),
+        avoiding os.getenv() discrepancies.
+        """
+        if self.ENVIRONMENT in ("production", "staging"):
+            v = self.DATABASE_URL
+            if not v or v.strip() == "":
+                raise ValueError(
+                    "DATABASE_URL is required in production. "
+                    "Render provides it via the postgres resource. "
+                    "Check: Settings -> Environment -> DATABASE_URL is set."
+                )
+            localhost_patterns = ("localhost", "127.0.0.1", "0.0.0.0")
+            if any(pat in v for pat in localhost_patterns):
+                raise ValueError(
+                    f"Invalid DATABASE_URL in {self.ENVIRONMENT}: resolves to localhost. "
+                    "Render cannot reach localhost. "
+                    "Use the connection string from Render's postgres resource."
+                )
+        return self
 
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60
