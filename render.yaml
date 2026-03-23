@@ -50,6 +50,10 @@ services:
       - key: MERCADO_PAGO_WEBHOOK_SECRET
         sync: false  # set in dashboard when ready
 
+      # Redis (external: Upstash, Redis Cloud, or Railway)
+      - key: REDIS_URL
+        sync: false  # set in dashboard
+
       # Storage
       - key: STORAGE_PATH
         value: /app/storage
