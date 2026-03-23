@@ -1,9 +1,12 @@
+import logging
 import os
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -38,6 +41,36 @@ class Settings(BaseSettings):
 
     # Redis
     REDIS_URL: str = Field(default="redis://localhost:6379/0")
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def validate_database_url(cls, v: str) -> str:
+        """
+        Block localhost defaults in production/staging.
+
+        In production or staging, raises ValueError if DATABASE_URL
+        resolves to localhost — preventing silent fallback to a local
+        database that would fail on Render.
+
+        Development continues with the localhost default so local
+        docker-compose (postgres service on the bridge network) still works.
+        """
+        env = os.getenv("ENVIRONMENT", "development")
+        if env in ("production", "staging"):
+            if not v or v.strip() == "":
+                raise ValueError(
+                    "DATABASE_URL is required in production. "
+                    "Render provides it via the postgres resource. "
+                    "Check: Settings → Environment → DATABASE_URL is set."
+                )
+            localhost_patterns = ("localhost", "127.0.0.1", "0.0.0.0")
+            if any(pat in v for pat in localhost_patterns):
+                raise ValueError(
+                    f"Invalid DATABASE_URL in {env}: '{v}' resolves to localhost. "
+                    "Render cannot reach localhost. "
+                    "Use the connection string from Render's postgres resource."
+                )
+        return v
 
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60

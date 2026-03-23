@@ -1,5 +1,17 @@
 """Pytest configuration and fixtures for FacturaAI tests."""
 
+import os
+
+# Set DATABASE_URL BEFORE importing any src modules.
+# This must be set before src.core.config is loaded, since session.py
+# creates the async engine at module import time using settings.DATABASE_URL.
+# Use an in-memory SQLite URL so the module-level engine doesn't try localhost.
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///test.db"
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+os.environ.setdefault("ENVIRONMENT", "development")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-pytest-only")
+os.environ.setdefault("GROQ_API_KEY", "test-groq-key")
+
 from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, patch
 

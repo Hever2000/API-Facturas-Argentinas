@@ -17,8 +17,13 @@ def _normalize_database_url(url: str) -> str:
 
     Render provides 'postgresql://...' but asyncpg requires
     'postgresql+asyncpg://...'. Normalize if the async driver
-    prefix is missing.
+    prefix is missing. Defensively raises if URL is empty.
     """
+    if not url:
+        raise RuntimeError(
+            "DATABASE_URL is not set. "
+            "Set the DATABASE_URL environment variable to connect to PostgreSQL."
+        )
     if url.startswith("postgresql://"):
         return url.replace("postgresql://", "postgresql+asyncpg://", 1)
     return url
