@@ -77,7 +77,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /usr/local/lib/python3.12/site-packages/ /usr/local/lib/python3.12/site-packages/
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
-# Copy source + config
+# Set working directory BEFORE copying source files
+WORKDIR /app
+
+# Runtime environment (must be before COPY so it persists)
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Copy source + config (now correctly placed under /app)
 COPY src/ ./src/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
@@ -85,12 +92,6 @@ COPY pyproject.toml ./
 
 # Create storage dir
 RUN mkdir -p /app/storage
-
-# Runtime environment
-ENV PYTHONPATH=/app
-ENV PYTHONUNBUFFERED=1
-
-WORKDIR /app
 
 EXPOSE 8080
 
