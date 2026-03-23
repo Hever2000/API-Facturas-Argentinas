@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
-from src.db.redis import redis_service, redis_available
+from src.db.redis import redis_available, redis_service
 
 
 class RateLimiter:
