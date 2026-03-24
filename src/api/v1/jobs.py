@@ -4,7 +4,7 @@ import os
 from typing import Any
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -155,6 +155,7 @@ class JobListResponse(BaseModel):
 async def process_invoice(
     db: DBSession,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),  # noqa: B008
 ) -> dict:
     """
@@ -167,6 +168,7 @@ async def process_invoice(
     - Processing happens asynchronously in background
     """
     from src.api.deps import check_monthly_quota, check_rate_limit
+    from src.services.storage import storage_service
 
     await check_rate_limit(current_user)
 
@@ -187,18 +189,24 @@ async def process_invoice(
             detail=f"File too large: {size_mb:.1f}MB. Max: {settings.MAX_FILE_SIZE_MB}MB",
         )
 
-    suffix = os.path.splitext(file.filename or ".png")[1] or ".png"
-    filename = f"{uuid4()}{suffix}"
-    file_path = os.path.join(settings.STORAGE_PATH, filename)
+    # Upload to storage and get file key
+    upload_url, file_key = await storage_service.get_upload_url(
+        content_type=file.content_type,
+        filename=file.filename or "invoice.png",
+    )
 
-    with open(file_path, "wb") as f:
-        f.write(content)
+    # For local storage, we need to write the file directly
+    # For R2, the frontend will upload via pre-signed URL
+    if upload_url.startswith("file://"):
+        local_path = upload_url.replace("file://", "")
+        with open(local_path, "wb") as f:
+            f.write(content)
 
     job = Job(
         user_id=current_user.id,
         status="pending",
         filename=file.filename,
-        file_path=file_path,
+        file_path=file_key,  # Store R2 key instead of local path
         file_size=len(content),
         content_type=file.content_type,
     )
@@ -208,20 +216,21 @@ async def process_invoice(
 
     job_id = str(job.id)
 
+    # Queue background processing (no Celery needed)
     try:
-        from src.core.celery_app import celery_app
+        from src.services.workers.async_processor import process_job_background
 
-        task = celery_app.send_task(
-            "src.services.workers.tasks.process_job_task",
-            args=[job_id, str(current_user.id), file_path],
-            kwargs={},
+        background_tasks.add_task(
+            process_job_background,
+            job_id=job_id,
+            user_id=str(current_user.id),
+            file_key=file_key,
         )
 
-        job.celery_task_id = task.id
         job.status = "processing"
         await db.commit()
 
-        logger.info(f"Job {job_id} queued to Celery with task_id: {task.id}")
+        logger.info(f"Job {job_id} queued for background processing")
 
     except Exception as e:
         logger.error(f"Failed to queue job {job_id}: {str(e)}")
@@ -323,10 +332,9 @@ async def retry_job(
     job_id: UUID,
     db: DBSession,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ) -> dict:
     """Retry a failed job."""
-    from src.core.celery_app import celery_app
-
     result = await db.execute(select(Job).where(Job.id == job_id, Job.user_id == current_user.id))
     job = result.scalar_one_or_none()
 
@@ -347,21 +355,24 @@ async def retry_job(
 
     job.status = "pending"
     job.error_message = None
+    job.retry_count += 1
     await db.commit()
 
+    # Queue background processing
     try:
-        task = celery_app.send_task(
-            "src.services.workers.tasks.process_job_task",
-            args=[str(job_id), str(current_user.id), job.file_path],
-            kwargs={},
+        from src.services.workers.async_processor import process_job_background
+
+        background_tasks.add_task(
+            process_job_background,
+            job_id=str(job_id),
+            user_id=str(current_user.id),
+            file_key=job.file_path,
         )
 
-        job.celery_task_id = task.id
         job.status = "processing"
-        job.retry_count += 1
         await db.commit()
 
-        logger.info(f"Job {job_id} retry queued with task_id: {task.id}")
+        logger.info(f"Job {job_id} retry queued")
 
     except Exception as e:
         logger.error(f"Failed to queue retry for job {job_id}: {str(e)}")

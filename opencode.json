@@ -19,6 +19,11 @@
       "enabled": true,
       "url": "https://mcp.mercadopago.com/mcp",
       "timeout": 30000
+    },
+    "supabase": {
+      "type": "remote",
+      "url": "https://mcp.supabase.com/mcp?project_ref=sjsrqhuemifndfwpvfda",
+      "enabled": true
     }
   }
 }

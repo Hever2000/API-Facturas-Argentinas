@@ -95,6 +95,7 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           PADDLE_VL_TOKEN: ${{ secrets.PADDLE_VL_TOKEN }}
           MERCADO_PAGO_ENABLED: "false"
+          STORAGE_BACKEND: "local"
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4

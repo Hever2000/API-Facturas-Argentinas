@@ -93,6 +93,7 @@ COPY pyproject.toml ./
 # Create storage dir
 RUN mkdir -p /app/storage
 
+# Expose port (Render provides $PORT)
 EXPOSE 8080
 
 # Health check for Render
@@ -100,5 +101,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8080}/health || exit 1
 
 # Startup script: run migrations, then start server
-# Uses $PORT if provided (Render), defaults to 8080 (Docker)
+# Uses $PORT if provided (Render/Docker), defaults to 8080
 CMD ["/bin/sh", "-c", "echo 'Running database migrations...' && alembic upgrade head && echo 'Starting API server...' && exec uvicorn src.api.main:app --host 0.0.0.0 --port ${PORT:-8080}"]

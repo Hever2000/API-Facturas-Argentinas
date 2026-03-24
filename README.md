@@ -239,8 +239,44 @@ mypy src/ --ignore-missing-imports
 ### Render (Backend)
 
 1. Connect GitHub repository to Render
-2. Set environment variables
-3. Deploy from `main` branch
+2. Create a new Web Service
+3. Use the following settings:
+   - Build Command: (empty - using Dockerfile)
+   - Start Command: `uvicorn src.api.main:app --host 0.0.0.0 --port $PORT`
+4. Set environment variables:
+   - `DATABASE_URL`: PostgreSQL connection string
+   - `REDIS_URL`: Redis connection string
+   - `SECRET_KEY`: Your secret key (min 32 chars)
+   - `GROQ_API_KEY`: Your Groq API key
+   - `STORAGE_BACKEND`: `local` (or `r2` for Cloudflare R2)
+5. Deploy from `main` branch
+
+### Environment Variables
+
+```bash
+# Required
+DATABASE_URL=postgresql+asyncpg://user:pass@host/db
+REDIS_URL=redis://host:6379/0
+SECRET_KEY=your-secret-key-min-32-chars
+GROQ_API_KEY=your_groq_api_key
+
+# Optional - Storage
+STORAGE_BACKEND=local  # or "r2" for Cloudflare R2
+
+# R2 Storage (only if STORAGE_BACKEND=r2)
+R2_ENDPOINT=https://account-id.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=your_access_key
+R2_SECRET_ACCESS_KEY=your_secret_key
+R2_BUCKET_NAME=facturaai-storage
+
+# Optional - OCR
+PADDLE_VL_API_URL=https://c6vceb62c4n8zfaf.aistudio-app.com/layout-parsing
+PADDLE_VL_TOKEN=your_token
+
+# Optional - Mercado Pago
+MP_ACCESS_TOKEN=your_mp_access_token
+MP_WEBHOOK_SECRET=your_webhook_secret
+```
 
 ### Vercel (Frontend)
 

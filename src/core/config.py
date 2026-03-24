@@ -39,8 +39,15 @@ class Settings(BaseSettings):
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 10
 
-    # Redis
+    # Redis (Upstash or any Redis-compatible)
     REDIS_URL: str = Field(default="")
+
+    # R2 Storage (S3-compatible) - Cloudflare
+    R2_ENDPOINT: str = Field(default="")
+    R2_ACCESS_KEY_ID: str = Field(default="")
+    R2_SECRET_ACCESS_KEY: str = Field(default="")
+    R2_BUCKET_NAME: str = Field(default="facturaai-storage")
+    R2_PUBLIC_URL: str = Field(default="")  # Public URL for R2 bucket
 
     @model_validator(mode="after")
     def _block_localhost_in_prod(self) -> "Settings":
@@ -52,20 +59,35 @@ class Settings(BaseSettings):
         avoiding os.getenv() discrepancies.
         """
         if self.ENVIRONMENT in ("production", "staging"):
+            # Database URL required
             v = self.DATABASE_URL
             if not v or v.strip() == "":
                 raise ValueError(
                     "DATABASE_URL is required in production. "
-                    "Render provides it via the postgres resource. "
-                    "Check: Settings -> Environment -> DATABASE_URL is set."
+                    "Use Neon (neon.tech) or Render's postgres resource."
                 )
             localhost_patterns = ("localhost", "127.0.0.1", "0.0.0.0")
             if any(pat in v for pat in localhost_patterns):
                 raise ValueError(
                     f"Invalid DATABASE_URL in {self.ENVIRONMENT}: resolves to localhost. "
-                    "Render cannot reach localhost. "
-                    "Use the connection string from Render's postgres resource."
+                    "Use a cloud database like Neon, Supabase, or Render's postgres."
                 )
+
+            # Redis URL required in production
+            if not self.REDIS_URL or self.REDIS_URL.strip() == "":
+                raise ValueError(
+                    "REDIS_URL is required in production. "
+                    "Use Upstash (upstash.com) for free-tier Redis."
+                )
+
+            # If using R2 storage, validate credentials
+            if self.STORAGE_BACKEND == "r2":
+                if not self.R2_ENDPOINT:
+                    raise ValueError("R2_ENDPOINT required when STORAGE_BACKEND=r2")
+                if not self.R2_ACCESS_KEY_ID:
+                    raise ValueError("R2_ACCESS_KEY_ID required when STORAGE_BACKEND=r2")
+                if not self.R2_SECRET_ACCESS_KEY:
+                    raise ValueError("R2_SECRET_ACCESS_KEY required when STORAGE_BACKEND=r2")
         return self
 
     # Rate Limiting
@@ -87,6 +109,7 @@ class Settings(BaseSettings):
     MERCADO_PAGO_ENABLED: bool = False
 
     # Storage
+    STORAGE_BACKEND: Literal["local", "r2"] = "local"
     STORAGE_PATH: str = Field(default="./storage")
     MAX_FILE_SIZE_MB: int = 10
 
