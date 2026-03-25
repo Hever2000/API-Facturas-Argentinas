@@ -192,6 +192,7 @@ async def process_invoice(
                     "error": "demo_limit_reached",
                     "message": "Free demo limit reached. Please register.",
                     "retry_after_seconds": ttl,
+                    "retry_after_hours": hours_remaining,
                 },
                 headers={"Retry-After": str(ttl)},
             )
