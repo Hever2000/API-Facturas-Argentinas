@@ -36,6 +36,8 @@ jobs:
         run: |
           echo "Sending errors to AI..."
           python scripts/ai_fix.py
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
       - name: Commit fixes
         run: |
