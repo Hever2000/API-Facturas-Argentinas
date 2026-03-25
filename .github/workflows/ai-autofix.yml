@@ -1,0 +1,47 @@
+name: AI Autofix
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+
+jobs:
+  autofix:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+
+      - name: Get CI logs
+        run: |
+          echo "Fetching logs..."
+          gh run view ${{ github.event.workflow_run.id }} --log > logs.txt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract errors
+        run: |
+          grep -i "error" logs.txt > errors.txt || true
+
+      - name: Send to AI agent
+        run: |
+          echo "Sending errors to AI..."
+          python scripts/ai_fix.py
+
+      - name: Commit fixes
+        run: |
+          git config --global user.name "ai-autofix"
+          git config --global user.email "ai@bot.com"
+
+          git add .
+          git commit -m "🤖 AI Autofix: fix CI errors" || echo "No changes"
+          git push
