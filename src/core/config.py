@@ -124,6 +124,14 @@ class Settings(BaseSettings):
         ]
     )
 
+    @model_validator(mode="after")
+    def _parse_cors_origins_from_env(self) -> "Settings":
+        """Parse CORS_ORIGINS from environment variable if provided."""
+        cors_env = os.getenv("CORS_ORIGINS")
+        if cors_env:
+            self.CORS_ORIGINS = [origin.strip() for origin in cors_env.split(",") if origin.strip()]
+        return self
+
     # Paths
     TEMP_PATH: str = "./temp"
 
