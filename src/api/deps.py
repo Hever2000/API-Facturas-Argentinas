@@ -1,7 +1,8 @@
+import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +11,8 @@ from src.db import get_db
 from src.models.user import User
 from src.services.apikey import APIKeyService, rate_limiter
 from src.services.auth import AuthService
+
+logger = logging.getLogger(__name__)
 
 security = HTTPBearer(auto_error=False)
 api_key_security = HTTPBearer(auto_error=False)
@@ -176,3 +179,54 @@ APIKeyUser = Annotated[User, Depends(get_current_user_via_api_key)]
 AnyUser = Annotated[User, Depends(get_current_user_or_api_key)]
 DBSession = Annotated[AsyncSession, Depends(get_db)]
 RateLimitedUser = Annotated[User, Depends(get_current_user)]
+
+
+# Demo mode rate limiting constants
+DEMO_RATE_LIMIT_KEY_PREFIX = "demo_usage"
+DEMO_RATE_LIMIT_TTL_SECONDS = 86400  # 24 hours
+
+
+def get_client_ip(request_headers: dict) -> str:
+    """
+    Extract client IP from request headers.
+    Handles X-Forwarded-For for proxies/load balancers.
+    """
+    # Check X-Forwarded-For header (may contain multiple IPs)
+    forwarded_for = request_headers.get("x-forwarded-for")
+    if forwarded_for:
+        # Take the first IP (original client)
+        return forwarded_for.split(",")[0].strip()
+    
+    # Check X-Real-IP header (common in Nginx/Proxies)
+    real_ip = request_headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    
+    # Fallback - should be set by the calling code
+    return "unknown"
+
+
+async def check_demo_rate_limit(client_ip: str) -> tuple[bool, int]:
+    """
+    Check if demo user has exceeded their daily rate limit.
+    
+    Returns:
+        (is_allowed, ttl_seconds): Whether request is allowed and TTL if not
+    """
+    from src.db.redis import redis_service
+    
+    if not redis_service.is_available:
+        # If Redis is down, allow the request (fail open)
+        logger.warning("Redis unavailable - allowing demo request (fail-open)")
+        return True, 0
+    
+    key = f"{DEMO_RATE_LIMIT_KEY_PREFIX}:{client_ip}"
+    
+    # Check if key exists
+    if await redis_service.exists(key):
+        ttl = await redis_service.ttl(key)
+        return False, ttl
+    
+    # Allow request and set key with 24h TTL
+    await redis_service.setex(key, DEMO_RATE_LIMIT_TTL_SECONDS, "1")
+    return True, 0

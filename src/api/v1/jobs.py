@@ -3,12 +3,12 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from src.api.deps import CurrentUser, DBSession
+from src.api.deps import CurrentUser, DBSession, OptionalUser
 from src.core.config import settings
 from src.core.feedback import add_correction as add_feedback_correction
 from src.core.feedback import export_training_jsonl as do_export
@@ -152,26 +152,53 @@ class JobListResponse(BaseModel):
 
 @router.post("/process", status_code=status.HTTP_202_ACCEPTED)
 async def process_invoice(
+    request: Request,
     db: DBSession,
-    current_user: CurrentUser,
     background_tasks: BackgroundTasks,
+    user: OptionalUser,
     file: UploadFile = File(...),  # noqa: B008
 ) -> dict:
     """
     Upload an invoice image and process it with OCR + LLM.
 
     - **file**: Invoice image (PNG, JPG, PDF)
-    - Requires authentication
-    - Subject to rate limiting and monthly quota
+    - Authentication is OPTIONAL (demo mode available)
+    - Demo: 1 request per IP per day
+    - Authenticated users: subject to rate limiting and monthly quota
     - Returns job_id for status checking
     - Processing happens asynchronously in background
     """
-    from src.api.deps import check_monthly_quota, check_rate_limit
+    from src.api.deps import (
+        check_demo_rate_limit,
+        check_monthly_quota,
+        check_rate_limit,
+        get_client_ip,
+    )
     from src.services.storage import storage_service
 
-    await check_rate_limit(current_user)
-
-    await check_monthly_quota(current_user)
+    is_demo = False
+    
+    if user is None:
+        # Guest user - check demo rate limit
+        is_demo = True
+        client_ip = get_client_ip(dict(request.headers))
+        allowed, ttl = await check_demo_rate_limit(client_ip)
+        
+        if not allowed:
+            hours_remaining = ttl // 3600
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={
+                    "error": "demo_limit_reached",
+                    "message": "Free demo limit reached. Please register.",
+                    "retry_after_seconds": ttl,
+                },
+                headers={"Retry-After": str(ttl)},
+            )
+    else:
+        # Authenticated user - apply normal rate limits
+        await check_rate_limit(user)
+        await check_monthly_quota(user)
 
     allowed_types = {"image/png", "image/jpeg", "image/jpg", "application/pdf"}
     if file.content_type not in allowed_types:
@@ -201,8 +228,12 @@ async def process_invoice(
         with open(local_path, "wb") as f:
             f.write(content)
 
+    # Determine user_id (use demo user UUID for guest requests)
+    DEMO_USER_UUID = "00000000-0000-0000-0000-000000000000"
+    user_id = str(user.id) if user else DEMO_USER_UUID
+    
     job = Job(
-        user_id=current_user.id,
+        user_id=user_id,
         status="pending",
         filename=file.filename,
         file_path=file_key,  # Store R2 key instead of local path
@@ -222,7 +253,7 @@ async def process_invoice(
         background_tasks.add_task(
             process_job_background,
             job_id=job_id,
-            user_id=str(current_user.id),
+            user_id=user_id,
             file_key=file_key,
         )
 
@@ -241,7 +272,7 @@ async def process_invoice(
             detail=f"Failed to queue job: {str(e)}",
         )
 
-    return {"job_id": job_id, "status": "pending", "message": "Job queued for processing"}
+    return {"job_id": job_id, "status": "pending", "message": "Job queued for processing", "is_demo": is_demo}
 
 
 @router.get("", response_model=JobListResponse)
